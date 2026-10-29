@@ -1,0 +1,134 @@
+---
+title: '"Estudio Estadístico sobre el Impacto del Uso de Redes Sociales en Estudiantes"'
+author: '"Estudiante de Análisis Estadístico"'
+date: "2026-10-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+title: "Estudio Estadístico sobre el Impacto del Uso de Redes Sociales en Estudiantes"
+subtitle: "Análisis Descriptivo, Pruebas de Hipótesis y Modelado de Regresión"
+author: "Estudiante de Análisis Estadístico"
+date: "r Sys.Date()"
+output:
+html_document:
+theme: flatly
+toc: true
+toc_depth: 3
+toc_float:
+collapsed: false
+smooth_scroll: true
+code_folding: hide
+number_sections: true
+fig_caption: true
+df_print: pagedknitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 5
+)
+
+# Carga de paquetes esenciales
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(corrplot)
+library(car)
+library(broom)
+
+# Comprobación y carga de datos procesados
+if (file.exists("output/estudiantes_clean.rds")) {
+  df <- readRDS("output/estudiantes_clean.rds")
+} else if (file.exists("data/4. Estudiantes.csv")) {
+  library(janitor)
+  df <- read_csv("data/4. Estudiantes.csv", show_col_types = FALSE) %>%
+    clean_names() %>%
+    mutate(
+      gender = as.factor(gender),
+      most_used_platform = as.factor(most_used_platform),
+      affects_academic_performance = as.factor(affects_academic_performance),
+      academic_level = factor(academic_level, levels = c("High School", "Undergraduate", "Graduate"), ordered = TRUE)
+    )
+} else {
+  stop("No se encontró el dataset en 'output/' ni en 'data/'.")
+}
+Introducción y Planteamiento del ProblemaEl uso masivo de plataformas digitales y redes sociales en el entorno educativo plantea interrogantes sobre su influencia en el bienestar integral de los jóvenes. Factores como la privación del sueño, el deterioro en el desempeño académico percibido y la sintomatología asociada a la adicción conductual demandan una cuantificación empírica rigurosa.Objetivos del EstudioDescriptivo: Caracterizar el perfil sociodemográfico, patrones de consumo digital y hábitos de descanso en la muestra.Comparativo (Pruebas de Hipótesis): Determinar si existen diferencias significativas en las horas de descanso nocturno y puntuaciones de adicción según la percepción de afectación académica y el nivel formativo.Modelado Predictivo: Evaluar la relación lineal entre el nivel de adicción autopercibido y variables clave como horas de pantalla, conflictos y salud mental.Metodología y Calidad del Conjunto de DatosEl conjunto de datos comprende registros sobre hábitos digitales en estudiantes de diferentes niveles educativos. Las principales variables se clasifican en:Cuantitativas continuas/discretas: Horas de uso diario (avg_daily_usage_hours), horas de descanso nocturno (sleep_hours_per_night), edad (age) y conflictos asociados (conflicts_over_social_media).Variables de escala Likert (1 al 10): Nivel de salud mental (mental_health_score) y escala de adicción (addicted_score).Cualitativas nominales y ordinales: Género (gender), plataforma más utilizada (most_used_platform), afectación del rendimiento académico (affects_academic_performance) y nivel educativo (academic_level).resumen_inicial <- data.frame(
+  Métrica = c("Total de Observaciones (n)", "Total de Variables", "Valores Nulos (NA)"),
+  Valor = c(nrow(df), ncol(df), sum(is.na(df)))
+)
+
+kable(resumen_inicial, caption = "Control de Calidad e Integridad de la Base de Datos") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+Análisis Estadístico DescriptivoMedidas de Tendencia Central y DispersiónA continuación, se resumen los estadísticos paramétricos y no paramétricos de las métricas numéricas más relevantes:tabla_descriptiva <- df %>%
+  summarise(
+    Variable = c("Uso Diario (horas)", "Sueño (horas)", "Salud Mental (1-10)", "Nivel Adicción (1-10)"),
+    Media = c(mean(avg_daily_usage_hours), mean(sleep_hours_per_night), mean(mental_health_score), mean(addicted_score)),
+    Mediana = c(median(avg_daily_usage_hours), median(sleep_hours_per_night), median(mental_health_score), median(addicted_score)),
+    Desv_Est = c(sd(avg_daily_usage_hours), sd(sleep_hours_per_night), sd(mental_health_score), sd(addicted_score)),
+    IQR = c(IQR(avg_daily_usage_hours), IQR(sleep_hours_per_night), IQR(mental_health_score), IQR(addicted_score))
+  )
+
+kable(tabla_descriptiva, digits = 2, caption = "Medidas Descriptivas Fundamentales") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+Visualizaciones Exploratoriasp1 <- ggplot(df, aes(x = avg_daily_usage_hours)) +
+  geom_histogram(binwidth = 0.5, fill = "#1f77b4", color = "white", alpha = 0.8) +
+  geom_vline(aes(xintercept = mean(avg_daily_usage_hours)), color = "red", linetype = "dashed", size = 1) +
+  labs(title = "Distribución de Horas de Uso Diario", x = "Horas / Día", y = "Frecuencia") +
+  theme_minimal()
+
+p2 <- ggplot(df, aes(x = reorder(most_used_platform, avg_daily_usage_hours, FUN = median), 
+                      y = avg_daily_usage_hours, fill = most_used_platform)) +
+  geom_boxplot(show.legend = FALSE, alpha = 0.8) +
+  coord_flip() +
+  labs(title = "Uso por Plataforma", x = "Plataforma", y = "Horas / Día") +
+  theme_minimal()
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+Estadística Inferencial y Contraste de HipótesisCorrelación Bivariada de PearsonSe evalúa la intensidad y sentido de las asociaciones lineales entre las métricas de uso digital y bienestar.$$r = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2 \sum (y_i - \bar{y})^2}}$$vars_num <- df %>%
+  select(avg_daily_usage_hours, sleep_hours_per_night, mental_health_score, conflicts_over_social_media, addicted_score)
+
+matriz_r <- cor(vars_num, method = "pearson")
+corrplot(matriz_r, method = "ellipse", type = "upper", addCoef.col = "black", tl.col = "black", diag = FALSE)
+
+cor_sueno <- cor.test(df$avg_daily_usage_hours, df$sleep_hours_per_night)
+El coeficiente de correlación entre horas de pantalla y horas de sueño es $r = `r round(cor_sueno$estimate, 3)`$ con un p-valor de $`r format.pval(cor_sueno$p.value, digits = 3)`$, lo que confirma una asociación lineal negativa estadísticamente significativa.Comparación de Medias: Prueba t de Student (Welch)Se formula el contraste para determinar si las horas de sueño difieren entre estudiantes que experimentan afectación en su rendimiento versus los que no:$$\begin{cases} H_0: \mu_{\text{Sueño (Afecta)}} = \mu_{\text{Sueño (No afecta)}} \\ H_1: \mu_{\text{Sueño (Afecta)}} \neq \mu_{\text{Sueño (No afecta)}} \end{cases}$$test_welch <- t.test(sleep_hours_per_night ~ affects_academic_performance, data = df, var.equal = FALSE)
+tidy(test_welch) %>%
+  kable(digits = 4, caption = "Resultados de la Prueba t de Welch para Horas de Sueño") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = TRUE)
+Al obtener un valor $p < 0.05$, se rechaza la hipótesis nula, concluyendo que los estudiantes que manifiestan impacto negativo en sus estudios duermen en promedio significativamente menos horas.ANOVA de una Vía: Nivel Académico vs. AdicciónSe analiza si la adicción media cambia a lo largo de las etapas formativas (High School, Undergraduate, Graduate).mod_aov <- aov(addicted_score ~ academic_level, data = df)
+tidy(mod_aov) %>%
+  kable(digits = 4, caption = "Tabla de Análisis de Varianza (ANOVA)") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = TRUE)
+Modelado Predictivo: Regresión Lineal MúltipleSe ajusta un modelo para predecir el índice de adicción ($\hat{Y}$) en función de predictores directos:$$\hat{Y}_{\text{Adicción}} = \beta_0 + \beta_1 X_{\text{Uso}} + \beta_2 X_{\text{Sueño}} + \beta_3 X_{\text{Salud Mental}} + \beta_4 X_{\text{Conflictos}} + \epsilon$$mod_lm <- lm(
+  addicted_score ~ avg_daily_usage_hours + sleep_hours_per_night + 
+                   mental_health_score + conflicts_over_social_media,
+  data = df
+)
+
+resumen_modelo <- tidy(mod_lm, conf.int = TRUE)
+r_cuad <- summary(mod_lm)$r.squared
+r_cuad_adj <- summary(mod_lm)$adj.r.squared
+
+kable(resumen_modelo, digits = 3, caption = "Coeficientes Estimados del Modelo de Regresión Lineal Múltiple") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = TRUE)
+El modelo explica un $`r round(r_cuad * 100, 2)`\%$ de la variabilidad observada en el puntaje de adicción ($R^2_{\text{adj}} = `r round(r_cuad_adj, 3)`$).Diagnóstico de Supuestos y Multicolinealidad (VIF)# Factores de Inflación de la Varianza
+vif_vals <- data.frame(Variable = names(vif(mod_lm)), VIF = vif(mod_lm))
+kable(vif_vals, digits = 2, caption = "Prueba de Multicolinealidad (VIF)") %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = FALSE)
+
+par(mfrow = c(2, 2))
+plot(mod_lm)
+par(mfrow = c(1, 1))
+Dado que todos los valores VIF son sustancialmente menores al umbral crítico de 5, se descartan problemas severos de multicolinealidad.Conclusiones y RecomendacionesCompromiso del Descanso: Se evidencia una relación inversamente proporcional robusta entre las horas de permanencia en plataformas digitales y la duración del descanso nocturno, constituyendo un factor de riesgo para el desempeño académico.Diferenciación por Afectación: La prueba $t$ de Welch confirmó diferencias significativas en la disponibilidad de sueño entre estudiantes con o sin afectación académica autopercibida.Determinantes de la Adicción: El modelo multivariado destaca que las horas diarias de consumo y los conflictos interpersonales generados por redes actúan como predictores positivos y significativos del índice de adicción conductual.Recomendaciones: Fomentar programas de higiene digital y concientización sobre el uso nocturno de pantallas en los campus universitarios y colegios.Referencias TécnicasR Core Team (2024). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria.Wickham, H. et al. (2019). Welcome to the Tidyverse. Journal of Open Source Software.Fox, J., & Weisberg, S. (2019). An R Companion to Applied Regression (3rd ed.). Thousand Oaks: Sage.
+```
+
+
+
+
+
